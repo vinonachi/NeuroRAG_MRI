@@ -2,9 +2,10 @@ import streamlit as st
 import numpy as np
 import torch
 import nibabel as nib
-import matplotlib.pyplot as plt
+import tempfile
+import os
 
-from src.data_loader import load_mri, normalize, get_middle_slice
+from src.data_loader import normalize, get_middle_slice
 from src.preprocessing import simulate_low_resolution
 from src.inference import load_model, run_inference
 from src.graph_analysis import (
@@ -54,8 +55,29 @@ def calculate_psnr(hr, sr):
 
 if uploaded_file is not None:
 
-    # Load MRI
-    volume = load_mri(uploaded_file)
+    # Create temporary directory
+    with tempfile.TemporaryDirectory() as tmpdir:
+
+        input_path = os.path.join(tmpdir, uploaded_file.name)
+
+        # Save uploaded file temporarily
+        with open(input_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+
+        # If file is .nii → convert to .nii.gz
+        if input_path.endswith(".nii"):
+            img = nib.load(input_path)
+            gz_path = input_path + ".gz"
+            nib.save(img, gz_path)
+            load_path = gz_path
+        else:
+            load_path = input_path
+
+        # Load MRI
+        img = nib.load(load_path)
+        volume = img.get_fdata()
+
+    # Normalize
     volume = normalize(volume)
     hr_slice = get_middle_slice(volume)
 
@@ -89,9 +111,8 @@ if uploaded_file is not None:
     psnr_value = calculate_psnr(hr_slice, output)
     st.metric("PSNR Score", round(psnr_value, 2))
 
-
     # ===============================
-    # Graph Analysis Mode
+    # Graph Analysis
     # ===============================
     if mode in ["Graph Analysis", "Full Pipeline"]:
 
@@ -108,18 +129,15 @@ if uploaded_file is not None:
         for key, value in metrics.items():
             st.write(f"**{key}:** {round(value, 2)}")
 
-
     # ===============================
     # Synthetic Generation
     # ===============================
     if st.button("Generate Synthetic Neurovascular Image"):
         noise = np.random.normal(0, 0.05, output.shape)
-        synthetic = output + noise
-        synthetic = np.clip(synthetic, 0, 1)
+        synthetic = np.clip(output + noise, 0, 1)
 
         st.subheader("Synthetic Generated Output")
         st.image(synthetic, clamp=True)
-
 
     # ===============================
     # Privacy Mode
@@ -128,7 +146,6 @@ if uploaded_file is not None:
         del volume
         del hr_slice
         st.warning("Privacy Mode Enabled: Original MRI data cleared from memory.")
-
 
 else:
     st.info("Please upload a MRI file to begin.")
