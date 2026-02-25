@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import torch
+import os
 
 from src.preprocessing import simulate_low_resolution
 from src.inference import load_model, run_inference
@@ -33,16 +34,19 @@ uploaded_file = st.sidebar.file_uploader(
 )
 
 # ===============================
-# Load Data (Upload OR Default)
+# Load Data (Upload OR data/sample_slice.npy)
 # ===============================
 if uploaded_file is not None:
     slice_data = np.load(uploaded_file)
 else:
     try:
-        slice_data = np.load("sample_slice.npy")
-        st.info("Using default demo slice.")
+        slice_data = np.load("data/sample_slice.npy")
+        st.info("Using default demo slice from data folder.")
     except:
-        st.error("No sample_slice.npy found in project root.")
+        st.error("data/sample_slice.npy not found.")
+        st.write("Files visible in root:", os.listdir())
+        if os.path.exists("data"):
+            st.write("Files inside data folder:", os.listdir("data"))
         st.stop()
 
 # Normalize
