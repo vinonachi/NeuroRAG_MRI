@@ -1,10 +1,7 @@
 import streamlit as st
 import numpy as np
 import torch
-import nibabel as nib
-import matplotlib.pyplot as plt
 
-from src.data_loader import load_mri, normalize, get_middle_slice
 from src.preprocessing import simulate_low_resolution
 from src.inference import load_model, run_inference
 from src.graph_analysis import (
@@ -17,7 +14,7 @@ from src.models.cnn_baseline import CNNSuperResolution
 
 
 # ===============================
-# Page Configuration
+# Page Setup
 # ===============================
 st.set_page_config(layout="wide")
 st.title("Privacy-Preserving Generative AI for Neurovascular MRI")
@@ -31,16 +28,64 @@ mode = st.sidebar.selectbox(
 
 privacy_mode = st.sidebar.checkbox("Enable Privacy-Preserving Mode")
 
-uploaded_file = st.sidebar.file_uploader(
-    "Upload MRI (.nii / .nii.gz)",
-    type=["nii", "gz"]
+
+# ===============================
+# Load Pre-Saved MRI Slice
+# ===============================
+try:
+    slice_data = np.load("sample_slice.npy")
+except:
+    st.error("sample_slice.npy not found. Please add it to project root.")
+    st.stop()
+
+# Normalize safety (if needed)
+slice_data = (slice_data - np.min(slice_data)) / (
+    np.max(slice_data) - np.min(slice_data)
 )
 
+hr_slice = slice_data
+
 
 # ===============================
-# Utility Functions
+# Simulate Low Resolution
 # ===============================
+lr_slice = simulate_low_resolution(hr_slice)
 
+
+# ===============================
+# Load Model
+# ===============================
+device = "cpu"
+model = load_model(CNNSuperResolution, "models/trained_model.pth", device=device)
+
+
+# ===============================
+# Run Inference
+# ===============================
+output = run_inference(model, lr_slice, device=device)
+
+
+# ===============================
+# Display Images
+# ===============================
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.subheader("Original High Resolution")
+    st.image(hr_slice, clamp=True)
+
+with col2:
+    st.subheader("Simulated Low Resolution")
+    st.image(lr_slice, clamp=True)
+
+with col3:
+    st.subheader("AI Reconstructed Image")
+    st.image(output, clamp=True)
+
+
+# ===============================
+# PSNR Metric
+# ===============================
 def calculate_psnr(hr, sr):
     mse = np.mean((hr - sr) ** 2)
     if mse == 0:
@@ -48,86 +93,47 @@ def calculate_psnr(hr, sr):
     return 20 * np.log10(1.0 / np.sqrt(mse))
 
 
+psnr_value = calculate_psnr(hr_slice, output)
+st.metric("PSNR Score", round(psnr_value, 2))
+
+
 # ===============================
-# Main Pipeline
+# Graph Analysis
 # ===============================
+if mode in ["Graph Analysis", "Full Pipeline"]:
 
-if uploaded_file is not None:
+    st.subheader("Vessel Skeleton Extraction")
 
-    # Load MRI
-    volume = load_mri(uploaded_file)
-    volume = normalize(volume)
-    hr_slice = get_middle_slice(volume)
+    skeleton = extract_skeleton(output)
+    st.image(skeleton, clamp=True)
 
-    # Simulate low resolution
-    lr_slice = simulate_low_resolution(hr_slice)
+    G = skeleton_to_graph(skeleton)
+    metrics = compute_graph_metrics(G)
 
-    col1, col2, col3 = st.columns(3)
+    st.subheader("Graph Topology Metrics")
 
-    with col1:
-        st.subheader("Original High Resolution")
-        st.image(hr_slice, clamp=True)
-
-    with col2:
-        st.subheader("Simulated Low Resolution")
-        st.image(lr_slice, clamp=True)
-
-    # Load model
-    device = "cpu"
-    model = load_model(CNNSuperResolution, "models/trained_model.pth", device=device)
-
-    # Run inference
-    output = run_inference(model, lr_slice, device=device)
-
-    with col3:
-        st.subheader("AI Reconstructed Image")
-        st.image(output, clamp=True)
-
-    # ===============================
-    # PSNR Metric
-    # ===============================
-    psnr_value = calculate_psnr(hr_slice, output)
-    st.metric("PSNR Score", round(psnr_value, 2))
+    for key, value in metrics.items():
+        st.write(f"**{key}:** {round(value, 2)}")
 
 
-    # ===============================
-    # Graph Analysis Mode
-    # ===============================
-    if mode in ["Graph Analysis", "Full Pipeline"]:
+# ===============================
+# Synthetic Generation
+# ===============================
+if st.button("Generate Synthetic Neurovascular Image"):
+    noise = np.random.normal(0, 0.05, output.shape)
+    synthetic = output + noise
+    synthetic = np.clip(synthetic, 0, 1)
 
-        st.subheader("Vessel Skeleton Extraction")
-
-        skeleton = extract_skeleton(output)
-        st.image(skeleton, clamp=True)
-
-        G = skeleton_to_graph(skeleton)
-        metrics = compute_graph_metrics(G)
-
-        st.subheader("Graph Topology Metrics")
-
-        for key, value in metrics.items():
-            st.write(f"**{key}:** {round(value, 2)}")
+    st.subheader("Synthetic Generated Output")
+    st.image(synthetic, clamp=True)
 
 
-    # ===============================
-    # Synthetic Generation
-    # ===============================
-    if st.button("Generate Synthetic Neurovascular Image"):
-        noise = np.random.normal(0, 0.05, output.shape)
-        synthetic = output + noise
-        synthetic = np.clip(synthetic, 0, 1)
-
-        st.subheader("Synthetic Generated Output")
-        st.image(synthetic, clamp=True)
-
-
-    # ===============================
-    # Privacy Mode
-    # ===============================
-    if privacy_mode:
-        del volume
-        del hr_slice
-        st.warning("Privacy Mode Enabled: Original MRI data cleared from memory.")
+# ===============================
+# Privacy Mode
+# ===============================
+if privacy_mode:
+    del hr_slice
+    st.warning("Privacy Mode Enabled: Original MRI data cleared from memory.")
 
 
 else:
