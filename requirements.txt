@@ -1,0 +1,7 @@
+streamlit
+torch
+numpy
+matplotlib
+nibabel
+scikit-image
+networkx
