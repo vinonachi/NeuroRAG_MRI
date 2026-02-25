@@ -9,7 +9,6 @@ from src.graph_analysis import (
     skeleton_to_graph,
     compute_graph_metrics
 )
-
 from src.models.cnn_baseline import CNNSuperResolution
 
 
@@ -28,29 +27,35 @@ mode = st.sidebar.selectbox(
 
 privacy_mode = st.sidebar.checkbox("Enable Privacy-Preserving Mode")
 
+uploaded_file = st.sidebar.file_uploader(
+    "Upload MRI slice (.npy)",
+    type=["npy"]
+)
 
 # ===============================
-# Load Pre-Saved MRI Slice
+# Load Data (Upload OR Default)
 # ===============================
-try:
-    slice_data = np.load("sample_slice.npy")
-except:
-    st.error("sample_slice.npy not found. Please add it to project root.")
-    st.stop()
+if uploaded_file is not None:
+    slice_data = np.load(uploaded_file)
+else:
+    try:
+        slice_data = np.load("sample_slice.npy")
+        st.info("Using default demo slice.")
+    except:
+        st.error("No sample_slice.npy found in project root.")
+        st.stop()
 
-# Normalize safety (if needed)
+# Normalize
 slice_data = (slice_data - np.min(slice_data)) / (
     np.max(slice_data) - np.min(slice_data)
 )
 
 hr_slice = slice_data
 
-
 # ===============================
 # Simulate Low Resolution
 # ===============================
 lr_slice = simulate_low_resolution(hr_slice)
-
 
 # ===============================
 # Load Model
@@ -58,12 +63,10 @@ lr_slice = simulate_low_resolution(hr_slice)
 device = "cpu"
 model = load_model(CNNSuperResolution, "models/trained_model.pth", device=device)
 
-
 # ===============================
 # Run Inference
 # ===============================
 output = run_inference(model, lr_slice, device=device)
-
 
 # ===============================
 # Display Images
@@ -82,9 +85,8 @@ with col3:
     st.subheader("AI Reconstructed Image")
     st.image(output, clamp=True)
 
-
 # ===============================
-# PSNR Metric
+# PSNR
 # ===============================
 def calculate_psnr(hr, sr):
     mse = np.mean((hr - sr) ** 2)
@@ -92,10 +94,8 @@ def calculate_psnr(hr, sr):
         return 100
     return 20 * np.log10(1.0 / np.sqrt(mse))
 
-
 psnr_value = calculate_psnr(hr_slice, output)
 st.metric("PSNR Score", round(psnr_value, 2))
-
 
 # ===============================
 # Graph Analysis
@@ -115,26 +115,19 @@ if mode in ["Graph Analysis", "Full Pipeline"]:
     for key, value in metrics.items():
         st.write(f"**{key}:** {round(value, 2)}")
 
-
 # ===============================
 # Synthetic Generation
 # ===============================
 if st.button("Generate Synthetic Neurovascular Image"):
     noise = np.random.normal(0, 0.05, output.shape)
-    synthetic = output + noise
-    synthetic = np.clip(synthetic, 0, 1)
+    synthetic = np.clip(output + noise, 0, 1)
 
     st.subheader("Synthetic Generated Output")
     st.image(synthetic, clamp=True)
-
 
 # ===============================
 # Privacy Mode
 # ===============================
 if privacy_mode:
     del hr_slice
-    st.warning("Privacy Mode Enabled: Original MRI data cleared from memory.")
-
-
-else:
-    st.info("Please upload a MRI file to begin.")
+    st.warning("Privacy Mode Enabled: Original MRI cleared from memory.")
