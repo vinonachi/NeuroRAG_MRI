@@ -1,0 +1,20 @@
+import nibabel as nib
+import numpy as np
+
+# Load your large MRI file (must be in same folder or give full path)
+img = nib.load("sub-01_part-mag_ME3DEPI_crop_ups2X_prepped_echo-mean.nii.gz")
+
+volume = img.get_fdata()
+
+# Extract middle slice
+middle_slice = volume[:, :, volume.shape[2] // 2]
+
+# Normalize (important for model)
+middle_slice = (middle_slice - np.min(middle_slice)) / (
+    np.max(middle_slice) - np.min(middle_slice)
+)
+
+# Save as lightweight numpy file
+np.save("sample_slice.npy", middle_slice)
+
+print("sample_slice.npy created successfully!")
