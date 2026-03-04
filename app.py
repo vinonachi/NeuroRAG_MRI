@@ -1,14 +1,11 @@
 import streamlit as st
 import numpy as np
 import torch
-import nibabel as nib
-import tempfile
+from PIL import Image
 import os
 
-from src.data_loader import normalize, get_middle_slice
 from src.preprocessing import simulate_low_resolution
 from src.inference import load_model, run_inference
-from PIL import Image
 from src.graph_analysis import (
     extract_skeleton,
     skeleton_to_graph,
@@ -22,6 +19,7 @@ from src.models.cnn_baseline import CNNSuperResolution
 # Page Configuration
 # ===============================
 st.set_page_config(layout="wide")
+
 st.title("Privacy-Preserving Generative AI for Neurovascular MRI")
 
 st.sidebar.title("NeuroRAG Control Panel")
@@ -37,6 +35,7 @@ uploaded_file = st.sidebar.file_uploader(
     "Upload MRI Image",
     type=["png", "jpg", "jpeg"]
 )
+
 
 # ===============================
 # Utility Functions
@@ -55,16 +54,24 @@ def calculate_psnr(hr, sr):
 
 if uploaded_file is not None:
 
-    # Load uploaded image
+    # ===============================
+    # Load Image
+    # ===============================
     image = Image.open(uploaded_file).convert("L")
-    hr_slice = np.array(image).astype(np.float32)
 
-    # Normalize
-    hr_slice = hr_slice / 255.0
+    # Resize for CNN model
+    image = image.resize((256,256))
 
-    # Simulate low resolution
+    hr_slice = np.array(image).astype(np.float32) / 255.0
+
+    # ===============================
+    # Simulate Low Resolution
+    # ===============================
     lr_slice = simulate_low_resolution(hr_slice)
 
+    # ===============================
+    # Display Images
+    # ===============================
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -75,13 +82,27 @@ if uploaded_file is not None:
         st.subheader("Simulated Low Resolution")
         st.image(lr_slice, clamp=True)
 
-    # Load model
+    # ===============================
+    # Load AI Model
+    # ===============================
     device = "cpu"
-   model_path = os.path.join("models", "trained_model.pth")
-model = load_model(CNNSuperResolution, model_path, device=device)
 
-    # Run inference
-    output = run_inference(model, lr_slice, device=device)
+    model_path = os.path.join("models", "trained_model.pth")
+
+    try:
+        model = load_model(CNNSuperResolution, model_path, device=device)
+    except:
+        model = None
+        st.warning("Model could not be loaded. Using fallback.")
+
+    # ===============================
+    # Run Super Resolution
+    # ===============================
+    try:
+        output = run_inference(model, lr_slice, device=device)
+    except:
+        output = lr_slice
+        st.warning("Inference failed. Showing interpolated output.")
 
     with col3:
         st.subheader("AI Reconstructed Image")
@@ -100,34 +121,46 @@ model = load_model(CNNSuperResolution, model_path, device=device)
 
         st.subheader("Vessel Skeleton Extraction")
 
-        skeleton = extract_skeleton(output)
-        st.image(skeleton, clamp=True)
+        try:
+            skeleton = extract_skeleton(output)
 
-        G = skeleton_to_graph(skeleton)
-        metrics = compute_graph_metrics(G)
+            st.image(skeleton, clamp=True)
 
-        st.subheader("Graph Topology Metrics")
+            if np.sum(skeleton) > 0:
 
-        for key, value in metrics.items():
-            st.write(f"**{key}:** {round(value, 2)}")
+                G = skeleton_to_graph(skeleton)
+                metrics = compute_graph_metrics(G)
+
+                st.subheader("Graph Topology Metrics")
+
+                for key, value in metrics.items():
+                    st.write(f"**{key}:** {round(value, 2)}")
+
+            else:
+                st.warning("No vessel structures detected.")
+
+        except:
+            st.warning("Graph analysis failed.")
 
     # ===============================
     # Synthetic Generation
     # ===============================
     if st.button("Generate Synthetic Neurovascular Image"):
+
         noise = np.random.normal(0, 0.05, output.shape)
+
         synthetic = np.clip(output + noise, 0, 1)
 
         st.subheader("Synthetic Generated Output")
+
         st.image(synthetic, clamp=True)
 
     # ===============================
     # Privacy Mode
     # ===============================
     if privacy_mode:
-        del volume
         del hr_slice
-        st.warning("Privacy Mode Enabled: Original MRI data cleared from memory.")
+        st.warning("Privacy Mode Enabled: Original data cleared from memory.")
 
 else:
-    st.info("Please upload a MRI file to begin.")
+    st.info("Please upload an image to begin.")
