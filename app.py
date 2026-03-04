@@ -8,6 +8,7 @@ import os
 from src.data_loader import normalize, get_middle_slice
 from src.preprocessing import simulate_low_resolution
 from src.inference import load_model, run_inference
+from PIL import Image
 from src.graph_analysis import (
     extract_skeleton,
     skeleton_to_graph,
@@ -33,10 +34,9 @@ mode = st.sidebar.selectbox(
 privacy_mode = st.sidebar.checkbox("Enable Privacy-Preserving Mode")
 
 uploaded_file = st.sidebar.file_uploader(
-    "Upload MRI (.nii / .nii.gz)",
-    type=["nii", "gz"]
+    "Upload MRI Image",
+    type=["png", "jpg", "jpeg"]
 )
-
 
 # ===============================
 # Utility Functions
@@ -55,31 +55,12 @@ def calculate_psnr(hr, sr):
 
 if uploaded_file is not None:
 
-    # Create temporary directory
-    with tempfile.TemporaryDirectory() as tmpdir:
-
-        input_path = os.path.join(tmpdir, uploaded_file.name)
-
-        # Save uploaded file temporarily
-        with open(input_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-
-        # If file is .nii → convert to .nii.gz
-        if input_path.endswith(".nii"):
-            img = nib.load(input_path)
-            gz_path = input_path + ".gz"
-            nib.save(img, gz_path)
-            load_path = gz_path
-        else:
-            load_path = input_path
-
-        # Load MRI
-        img = nib.load(load_path)
-        volume = img.get_fdata()
+    # Load uploaded image
+    image = Image.open(uploaded_file).convert("L")
+    hr_slice = np.array(image).astype(np.float32)
 
     # Normalize
-    volume = normalize(volume)
-    hr_slice = get_middle_slice(volume)
+    hr_slice = hr_slice / 255.0
 
     # Simulate low resolution
     lr_slice = simulate_low_resolution(hr_slice)
