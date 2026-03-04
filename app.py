@@ -95,22 +95,26 @@ if uploaded_file is not None:
         model = None
         st.warning("Model could not be loaded. Using fallback.")
 
-    # ===============================
-    # Run Super Resolution
-    # ===============================
-    try:
-        output = run_inference(model, lr_slice, device=device)
+ # ===============================
+# Run Super Resolution
+# ===============================
 
-st.write("Output Min:", np.min(output))
-st.write("Output Max:", np.max(output))
-    except:
-        output = lr_slice
-        st.warning("Inference failed. Showing interpolated output.")
+try:
+    output = run_inference(model, lr_slice, device=device)
 
-    with col3:
-        st.subheader("AI Reconstructed Image")
-        st.image(output, clamp=True)
+    st.write("Output Min:", np.min(output))
+    st.write("Output Max:", np.max(output))
 
+except Exception as e:
+    st.warning("Inference failed. Showing fallback output.")
+    st.write(e)
+
+    output = lr_slice
+
+
+with col3:
+    st.subheader("AI Reconstructed Image")
+    st.image(output, clamp=True)
     # ===============================
     # PSNR Metric
     # ===============================
