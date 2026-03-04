@@ -1,7 +1,7 @@
 streamlit
 torch
 numpy
-matplotlib
-nibabel
+pillow
+opencv-python-headless
 scikit-image
 networkx
