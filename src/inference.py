@@ -8,12 +8,8 @@ def load_model(model_class, model_path, device="cpu"):
 
     try:
         checkpoint = torch.load(model_path, map_location=device)
-
-        if isinstance(checkpoint, dict):
-            model.load_state_dict(checkpoint)
-
+        model.load_state_dict(checkpoint)
         model.eval()
-
     except:
         print("Model loading failed")
 
@@ -22,11 +18,18 @@ def load_model(model_class, model_path, device="cpu"):
 
 def run_inference(model, image, device="cpu"):
 
-    img = torch.tensor(image).unsqueeze(0).unsqueeze(0).float().to(device)
+    # convert numpy -> tensor
+    img = torch.tensor(image, dtype=torch.float32)
+
+    # shape correction
+    img = img.unsqueeze(0).unsqueeze(0).to(device)
 
     with torch.no_grad():
         output = model(img)
 
     output = output.squeeze().cpu().numpy()
+
+    # normalize output
+    output = (output - output.min()) / (output.max() - output.min() + 1e-8)
 
     return output
