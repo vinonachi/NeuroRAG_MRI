@@ -100,6 +100,9 @@ if uploaded_file is not None:
     # ===============================
     try:
         output = run_inference(model, lr_slice, device=device)
+
+st.write("Output Min:", np.min(output))
+st.write("Output Max:", np.max(output))
     except:
         output = lr_slice
         st.warning("Inference failed. Showing interpolated output.")
