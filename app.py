@@ -77,7 +77,8 @@ if uploaded_file is not None:
 
     # Load model
     device = "cpu"
-    model = load_model(CNNSuperResolution, "models/trained_model.pth", device=device)
+   model_path = os.path.join("models", "trained_model.pth")
+model = load_model(CNNSuperResolution, model_path, device=device)
 
     # Run inference
     output = run_inference(model, lr_slice, device=device)
