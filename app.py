@@ -16,7 +16,7 @@ from src.models.cnn_baseline import CNNSuperResolution
 
 
 # ===============================
-# Page Configuration
+# Page Setup
 # ===============================
 st.set_page_config(layout="wide")
 
@@ -38,13 +38,14 @@ uploaded_file = st.sidebar.file_uploader(
 
 
 # ===============================
-# Utility Functions
+# PSNR Function
 # ===============================
-
 def calculate_psnr(hr, sr):
     mse = np.mean((hr - sr) ** 2)
+
     if mse == 0:
         return 100
+
     return 20 * np.log10(1.0 / np.sqrt(mse))
 
 
@@ -54,24 +55,15 @@ def calculate_psnr(hr, sr):
 
 if uploaded_file is not None:
 
-    # ===============================
-    # Load Image
-    # ===============================
+    # Load image
     image = Image.open(uploaded_file).convert("L")
-
-    # Resize for CNN model
     image = image.resize((256,256))
 
     hr_slice = np.array(image).astype(np.float32) / 255.0
 
-    # ===============================
     # Simulate Low Resolution
-    # ===============================
     lr_slice = simulate_low_resolution(hr_slice)
 
-    # ===============================
-    # Display Images
-    # ===============================
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -83,40 +75,38 @@ if uploaded_file is not None:
         st.image(lr_slice, clamp=True)
 
     # ===============================
-    # Load AI Model
+    # Load Model
     # ===============================
     device = "cpu"
-
     model_path = os.path.join("models", "trained_model.pth")
 
     try:
         model = load_model(CNNSuperResolution, model_path, device=device)
     except:
         model = None
-        st.warning("Model could not be loaded. Using fallback.")
+        st.warning("Model loading failed.")
 
- # ===============================
-# Run Super Resolution
-# ===============================
-
-try:
-    output = run_inference(model, lr_slice, device=device)
-
-    st.write("Output Min:", np.min(output))
-    st.write("Output Max:", np.max(output))
-
-except Exception as e:
-    st.warning("Inference failed. Showing fallback output.")
-    st.write(e)
-
-    output = lr_slice
-
-
-with col3:
-    st.subheader("AI Reconstructed Image")
-    st.image(output, clamp=True)
     # ===============================
-    # PSNR Metric
+    # Run Inference
+    # ===============================
+    try:
+        output = run_inference(model, lr_slice, device=device)
+
+        st.write("Output Min:", np.min(output))
+        st.write("Output Max:", np.max(output))
+
+    except Exception as e:
+        st.warning("Inference failed. Showing fallback output.")
+        st.write(e)
+
+        output = lr_slice
+
+    with col3:
+        st.subheader("AI Reconstructed Image")
+        st.image(output, clamp=True)
+
+    # ===============================
+    # PSNR
     # ===============================
     psnr_value = calculate_psnr(hr_slice, output)
     st.metric("PSNR Score", round(psnr_value, 2))
@@ -136,27 +126,28 @@ with col3:
             if np.sum(skeleton) > 0:
 
                 G = skeleton_to_graph(skeleton)
+
                 metrics = compute_graph_metrics(G)
 
                 st.subheader("Graph Topology Metrics")
 
                 for key, value in metrics.items():
-                    st.write(f"**{key}:** {round(value, 2)}")
+                    st.write(f"**{key}:** {round(value,2)}")
 
             else:
-                st.warning("No vessel structures detected.")
+                st.warning("No vessel structures detected")
 
         except:
-            st.warning("Graph analysis failed.")
+            st.warning("Graph analysis failed")
 
     # ===============================
     # Synthetic Generation
     # ===============================
     if st.button("Generate Synthetic Neurovascular Image"):
 
-        noise = np.random.normal(0, 0.05, output.shape)
+        noise = np.random.normal(0,0.05,output.shape)
 
-        synthetic = np.clip(output + noise, 0, 1)
+        synthetic = np.clip(output + noise,0,1)
 
         st.subheader("Synthetic Generated Output")
 
@@ -166,7 +157,9 @@ with col3:
     # Privacy Mode
     # ===============================
     if privacy_mode:
+
         del hr_slice
+
         st.warning("Privacy Mode Enabled: Original data cleared from memory.")
 
 else:
